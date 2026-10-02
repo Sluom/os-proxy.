@@ -5,7 +5,7 @@ const axios = require('axios');
 const app = express();
 app.use(cors());
 
-// مسار البحث: يجيب نتائج البحث (روابط الترجمات)
+// مسار البحث
 app.get('/search', async (req, res) => {
     try {
         const targetUrl = req.query.url;
@@ -25,23 +25,32 @@ app.get('/search', async (req, res) => {
     }
 });
 
-// مسار التحميل: يحمل ملف الترجمة كـ Text ويسلمه لـ Render
+// مسار التحميل: يمرر الملف كما هو (بدون تحويل لنص)
 app.get('/download', async (req, res) => {
     try {
         const targetUrl = req.query.url;
         if (!targetUrl) return res.status(400).send('Missing URL');
 
+        // حماية: فقط روابط opensubtitles
+        if (!/^https?:\/\/([a-z0-9-]+\.)*opensubtitles\.org\//i.test(targetUrl)) {
+            return res.status(403).send('Forbidden host');
+        }
+
         const response = await axios.get(targetUrl, {
-            headers: { 'User-Agent': 'VLSub 0.10.3' },
-            responseType: 'text', // نجبره يقراه كنص صافي
+            headers: {
+                'User-Agent': 'VLSub 0.10.3',
+                'X-User-Agent': 'VLSub 0.10.3',
+                'Accept': '*/*'
+            },
+            responseType: 'arraybuffer',
+            decompress: false,
             timeout: 10000
         });
-        
-        // نرجع النص الصافي لـ Render
-        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-        res.send(response.data);
+
+        res.setHeader('Content-Type', 'application/octet-stream');
+        res.send(Buffer.from(response.data));
     } catch (error) {
-        res.status(500).send('Download Failed');
+        res.status(error.response?.status || 500).send('Download Failed');
     }
 });
 
